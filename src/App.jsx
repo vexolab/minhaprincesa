@@ -634,7 +634,7 @@ function buildPresentationSequence(story) {
 
   if (hasDatedMoments) {
     sequence.push({ id: "time-together", type: "time" });
-    sequence.push({ id: "constellation", type: "constellation" });
+    sequence.push({ id: "collage", type: "collage" });
   }
 
   entries.forEach((entry, entryIndex) => {
@@ -667,6 +667,10 @@ function buildPresentationSequence(story) {
     sequence.push({ id: "future-message", type: "future" });
   }
 
+  const allPhotos = entries.filter((m) => !isBreath(m) && m.photo);
+  if (allPhotos.length > 0) {
+    sequence.push({ id: "photo-mosaic", type: "mosaic" });
+  }
   sequence.push({ id: "secret-letter", type: "secret" });
   sequence.push({ id: "final", type: "final" });
   return sequence;
@@ -676,7 +680,8 @@ function getSlideDuration(slide) {
   if (!slide) return 7000;
   if (slide.type === "opening") return 7500;
   if (slide.type === "time") return 6200;
-  if (slide.type === "constellation") return 6800;
+  if (slide.type === "collage") return 6800;
+  if (slide.type === "mosaic") return 8500;
   if (slide.type === "act") return 3800;
   if (slide.type === "breath") return Math.min(9000, Math.max(5600, (slide.breath.text?.length ?? 0) * 42));
   if (slide.type === "reasons") return 7200;
@@ -3068,8 +3073,10 @@ function Presentation({
           <OpeningSlide active={started} moodId={moodId} story={story} theme={theme} />
         ) : currentSlide.type === "time" ? (
           <TimeTogetherSlide moodId={moodId} story={story} />
-        ) : currentSlide.type === "constellation" ? (
-          <ConstellationSlide story={story} />
+        ) : currentSlide.type === "collage" ? (
+          <CollageSlide story={story} />
+        ) : currentSlide.type === "mosaic" ? (
+          <PhotoMosaicSlide story={story} />
         ) : currentSlide.type === "act" ? (
           <ActSlide act={currentSlide.act} index={STORY_ACTS.findIndex((act) => act.id === currentSlide.act.id)} moodId={moodId} theme={theme} />
         ) : currentSlide.type === "moment" ? (
@@ -3429,64 +3436,170 @@ function TimeTogetherSlide({ moodId, story }) {
   );
 }
 
-function ConstellationSlide({ story }) {
+function CollageSlide({ story }) {
   const firstDate = getFirstChronologicalDate(story.moments);
   const place = story.city?.trim();
 
   return (
-    <article className="scene-stars relative grid h-full w-full place-items-center overflow-hidden bg-[#090908] px-6 py-4 text-center">
-      <img alt="" className="absolute inset-0 h-full w-full object-cover" src="/theme/minimal-charcoal-gold.webp" />
-      <div className="absolute inset-0 bg-black/38" />
-
+    <article className="scene-fade relative grid h-full w-full place-items-center overflow-hidden bg-[#08050a] px-6 py-4 text-center">
+      {/* Ambient glows */}
       <div className="pointer-events-none absolute inset-0">
-        {constellationStars.map((star) => (
-          <span
-            className="constellation-star absolute rounded-full bg-[#f7d889] shadow-[0_0_12px_rgba(247,216,137,0.82)]"
-            key={star.id}
-            style={{
-              animationDelay: star.delay,
-              height: star.size,
-              left: star.left,
-              top: star.top,
-              width: star.size,
-            }}
-          />
-        ))}
-        <span className="absolute left-[18%] top-[28%] h-px w-[28%] rotate-[22deg] bg-gradient-to-r from-transparent via-[#f7d889]/38 to-transparent" />
-        <span className="absolute right-[17%] top-[39%] h-px w-[26%] -rotate-[28deg] bg-gradient-to-r from-transparent via-[#f7d889]/32 to-transparent" />
-        <span className="absolute bottom-[28%] left-[28%] h-px w-[42%] rotate-[8deg] bg-gradient-to-r from-transparent via-[#f7d889]/26 to-transparent" />
-        <span className="absolute left-[7%] top-[54%] h-px w-[22%] rotate-[15deg] bg-gradient-to-r from-transparent via-[#f7d889]/22 to-transparent" />
-        <span className="absolute right-[5%] bottom-[34%] h-px w-[20%] -rotate-[19deg] bg-gradient-to-r from-transparent via-[#f7d889]/20 to-transparent" />
-        <span className="absolute left-[38%] top-[14%] h-px w-[24%] rotate-[6deg] bg-gradient-to-r from-transparent via-[#f7d889]/18 to-transparent" />
+        <div className="absolute left-1/2 top-1/2 h-[70%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(108,33,53,0.22),transparent_70%)]" />
+        <div className="absolute right-[8%] top-[8%] h-52 w-52 rounded-full bg-[radial-gradient(ellipse,rgba(240,201,122,0.07),transparent_70%)]" />
+        <div className="absolute bottom-[10%] left-[4%] h-44 w-44 rounded-full bg-[radial-gradient(ellipse,rgba(232,160,184,0.09),transparent_70%)]" />
       </div>
 
-      <div className="relative mx-auto grid w-full max-w-lg gap-6">
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-[#f7d889]/32 bg-black/30 text-[#f7d889] backdrop-blur">
-          <Star className="star-pulse h-7 w-7 fill-current" />
-        </div>
-        <div className="grid gap-3">
-          <p className="story-copy-light text-xs font-black uppercase tracking-[0.24em] text-[#f7d889]">O céu daquela data</p>
-          <h2 className="story-copy-light break-words font-display text-5xl leading-[0.9] sm:text-8xl">
-            {story.fromName || "Eu"} + {story.toName || "você"}
+      {/* Scattered word fragments */}
+      <div className="pointer-events-none absolute inset-0 select-none overflow-hidden">
+        <span
+          className="luxury-rise absolute left-[4%] top-[10%] -rotate-[13deg] font-display text-4xl italic text-white/12"
+          style={{ animationDelay: "60ms" }}
+        >
+          amor
+        </span>
+        <span
+          className="luxury-rise absolute right-[5%] top-[7%] rotate-[9deg] text-[10px] font-black uppercase tracking-[0.26em] text-[#f0c97a]/26"
+          style={{ animationDelay: "140ms" }}
+        >
+          sempre
+        </span>
+        <span
+          className="luxury-rise absolute left-[2%] top-[40%] -rotate-[6deg] font-display text-xl italic text-[#e8a0b8]/22"
+          style={{ animationDelay: "100ms" }}
+        >
+          desde sempre
+        </span>
+        <span
+          className="luxury-rise absolute right-[3%] top-[46%] rotate-[7deg] font-display text-3xl italic text-white/11"
+          style={{ animationDelay: "180ms" }}
+        >
+          juntos
+        </span>
+        <span
+          className="luxury-rise absolute bottom-[17%] left-[4%] rotate-[11deg] font-display text-2xl italic text-[#f0c97a]/20"
+          style={{ animationDelay: "80ms" }}
+        >
+          nossa
+        </span>
+        <span
+          className="luxury-rise absolute bottom-[11%] right-[3%] -rotate-[8deg] text-[9px] font-black uppercase tracking-[0.22em] text-white/16"
+          style={{ animationDelay: "220ms" }}
+        >
+          para sempre
+        </span>
+        <span
+          className="luxury-rise absolute left-[8%] top-[25%] h-px w-14 -rotate-[16deg] bg-[#f0c97a]/16"
+          style={{ animationDelay: "160ms" }}
+        />
+        <span
+          className="luxury-rise absolute bottom-[30%] right-[7%] h-px w-10 rotate-[12deg] bg-[#e8a0b8]/14"
+          style={{ animationDelay: "200ms" }}
+        />
+      </div>
+
+      {/* Center content */}
+      <div className="relative z-10 mx-auto grid w-full max-w-sm gap-5">
+        <p
+          className="luxury-rise story-copy-light text-[10px] font-black uppercase tracking-[0.28em] text-[#f0c97a]"
+          style={{ animationDelay: "0ms" }}
+        >
+          a nossa história
+        </p>
+        <div className="luxury-rise grid gap-1" style={{ animationDelay: "120ms" }}>
+          <h2 className="story-copy-light break-words font-display text-[3.4rem] italic leading-[0.9] text-white sm:text-7xl">
+            {story.fromName || "Eu"}
           </h2>
-          <p className="story-copy-muted mx-auto max-w-sm text-base font-semibold leading-7 sm:text-lg">
-            Naquele dia, o mundo continuou girando. O meu começou a girar em volta de você.
-          </p>
+          <p className="story-copy-light font-display text-[1.8rem] leading-none text-[#e8a0b8]/58">&amp;</p>
+          <h2 className="story-copy-light break-words font-display text-[3.4rem] italic leading-[0.9] text-white sm:text-7xl">
+            {story.toName || "você"}
+          </h2>
         </div>
-        <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 text-[11px] font-black uppercase tracking-[0.1em] text-white">
-          {firstDate ? (
-            <span className="story-copy-light inline-flex items-center gap-2 rounded-full border border-white/16 bg-black/34 px-3 py-2 backdrop-blur">
-              <CalendarHeart className="h-4 w-4 text-[#f7d889]" />
-              {formatDate(firstDate)}
-            </span>
-          ) : null}
-          {place ? (
-            <span className="story-copy-light inline-flex max-w-full items-center gap-2 rounded-full border border-white/16 bg-black/34 px-3 py-2 backdrop-blur">
-              <MapPin className="h-4 w-4 shrink-0 text-[#f7d889]" />
-              <span className="truncate">{place}</span>
-            </span>
+        <div
+          className="luxury-rise mx-auto flex items-center gap-3 text-[#e8a0b8]/50"
+          style={{ animationDelay: "260ms" }}
+        >
+          <span className="h-px w-10 bg-current" />
+          <Heart className="h-3 w-3 fill-current" />
+          <span className="h-px w-10 bg-current" />
+        </div>
+        {(firstDate || place) ? (
+          <div
+            className="luxury-rise mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 text-[11px] font-black uppercase tracking-[0.1em]"
+            style={{ animationDelay: "360ms" }}
+          >
+            {firstDate ? (
+              <span className="story-copy-light inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/6 px-3 py-2 backdrop-blur">
+                <CalendarHeart className="h-3.5 w-3.5 text-[#f0c97a]" />
+                {formatDate(firstDate)}
+              </span>
+            ) : null}
+            {place ? (
+              <span className="story-copy-light inline-flex max-w-full items-center gap-2 rounded-full border border-white/14 bg-white/6 px-3 py-2 backdrop-blur">
+                <MapPin className="h-3.5 w-3.5 shrink-0 text-[#f0c97a]" />
+                <span className="truncate">{place}</span>
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function PhotoMosaicSlide({ story }) {
+  const photoMoments = story.moments.filter((m) => !isBreath(m) && m.photo);
+  const total = photoMoments.length;
+  if (total === 0) return null;
+
+  const cols = total === 1 ? 1 : total <= 4 ? 2 : 3;
+  const colClass = cols === 1 ? "grid-cols-1" : cols === 2 ? "grid-cols-2" : "grid-cols-3";
+  const shown = photoMoments.slice(0, 12);
+  const extra = total > 12 ? total - 12 : 0;
+
+  return (
+    <article className="scene-fade relative flex h-full w-full flex-col overflow-hidden bg-[#080508]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_60%_at_50%_55%,rgba(108,33,53,0.14),transparent_70%)]" />
+
+      <div className="relative z-10 shrink-0 px-4 pb-2 pt-5">
+        <p className="luxury-rise story-copy-light text-center text-[10px] font-black uppercase tracking-[0.26em] text-[#f0c97a]">
+          tudo isso somos nós
+        </p>
+      </div>
+
+      <div className="relative min-h-0 flex-1 px-3">
+        <div className={`grid h-full auto-rows-fr gap-1 ${colClass}`}>
+          {shown.map((moment, i) => {
+            const spanFull = cols === 3 && i === 0 && total % 3 !== 0;
+            return (
+              <div
+                key={moment.id}
+                className={`luxury-rise relative overflow-hidden rounded-md ${spanFull ? "col-span-2" : ""}`}
+                style={{ animationDelay: `${i * 55}ms` }}
+              >
+                <img
+                  alt=""
+                  className="photo-filter-luxury h-full w-full object-cover"
+                  src={moment.photo}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/24 to-transparent" />
+              </div>
+            );
+          })}
+          {extra > 0 ? (
+            <div className="luxury-rise relative flex items-center justify-center overflow-hidden rounded-md bg-white/6 backdrop-blur">
+              <span className="font-display text-3xl italic text-white/52">+{extra}</span>
+            </div>
           ) : null}
         </div>
+      </div>
+
+      <div className="relative z-10 shrink-0 px-4 pb-4 pt-2">
+        <p
+          className="luxury-rise story-copy-muted text-center text-xs font-medium"
+          style={{ animationDelay: "520ms" }}
+        >
+          cada foto, um pedaço do que somos
+        </p>
       </div>
     </article>
   );
