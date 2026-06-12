@@ -25,6 +25,7 @@ import {
   Volume2,
   VolumeX,
   Wand2,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -295,6 +296,7 @@ const initialStory = {
   moodId: "mix",
   styleId: VALENTINES_STYLE_ID,
   trackId: "aurora",
+  collagePhotos: [],
   moments: [
     {
       id: "moment-1",
@@ -410,6 +412,7 @@ function normalizeStory(story) {
     moodId: ROMANTIC_MOOD_IDS.has(story.moodId) ? story.moodId : "mix",
     styleId: VALENTINES_STYLE_ID,
     trackId: TRACK_BY_ID[story.trackId] ? story.trackId : "aurora",
+    collagePhotos: (story.collagePhotos ?? []).filter(Boolean),
     moments: safeMoments,
   };
 }
@@ -632,8 +635,11 @@ function buildPresentationSequence(story) {
   let photoIndex = 0;
   let lastActId = "";
 
+  const hasCollagePhotos = (story.collagePhotos ?? []).filter(Boolean).length > 0;
   if (hasDatedMoments) {
     sequence.push({ id: "time-together", type: "time" });
+  }
+  if (hasCollagePhotos || hasDatedMoments) {
     sequence.push({ id: "collage", type: "collage" });
   }
 
@@ -1425,6 +1431,29 @@ export default function App() {
     }
   }
 
+  async function handleAddCollagePhoto(file) {
+    if (!file) return;
+    setShareStatus("Otimizando foto da colagem...");
+    try {
+      const photo = await compressImageFile(file);
+      setStory((current) => ({
+        ...current,
+        collagePhotos: [...(current.collagePhotos ?? []), photo],
+      }));
+      setShareStatus(`Foto adicionada à colagem. ${(photo.length / 1024).toFixed(0)} KB.`);
+    } catch {
+      setShareStatus("Não consegui adicionar essa foto. Tente outra imagem.");
+    }
+  }
+
+  function removeCollagePhoto(index) {
+    setStory((current) => ({
+      ...current,
+      collagePhotos: (current.collagePhotos ?? []).filter((_, i) => i !== index),
+    }));
+    setShareStatus("");
+  }
+
   async function handleAudioUpload(file) {
     if (!file) return;
     setShareStatus("Carregando a musica para esta sessao...");
@@ -1762,6 +1791,8 @@ export default function App() {
       generateIntro={generateIntro}
       generateMomentText={generateMomentText}
       handlePhoto={handlePhoto}
+      handleAddCollagePhoto={handleAddCollagePhoto}
+      removeCollagePhoto={removeCollagePhoto}
       handleAudioUpload={handleAudioUpload}
       linkLength={linkLength}
       localAudio={localAudio}
@@ -1796,9 +1827,11 @@ function CreateMode({
   generateFinal,
   generateIntro,
   generateMomentText,
+  handleAddCollagePhoto,
   handleAudioUpload,
   handlePhoto,
   importDraftBackup,
+  removeCollagePhoto,
   linkLength,
   localAudio,
   loadNotice,
@@ -2041,6 +2074,56 @@ function CreateMode({
 
         {editorStep === "moments" ? (
           <>
+        <section className="editor-panel grid gap-4 p-4 sm:p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.18em] text-[#f0c97a]/80">Colagem de abertura</p>
+              <h2 className="font-display text-2xl leading-tight text-white sm:text-3xl">
+                Fotos que aparecem juntas antes dos seus momentos.
+              </h2>
+              <p className="mt-1.5 text-xs font-medium leading-5 text-white/52">
+                Adicione de 1 a 9 fotos. Elas aparecem espalhadas no slide de colagem, sem spoilar os momentos que vêm depois.
+              </p>
+            </div>
+            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-black text-[#1a0714] transition hover:-translate-y-0.5">
+              <ImagePlus className="h-4 w-4" />
+              Adicionar foto
+              <input
+                accept="image/*"
+                className="hidden"
+                multiple
+                onChange={async (event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  for (const file of files) await handleAddCollagePhoto(file);
+                  event.target.value = "";
+                }}
+                type="file"
+              />
+            </label>
+          </div>
+          {(story.collagePhotos ?? []).length > 0 ? (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+              {(story.collagePhotos ?? []).map((photo, i) => (
+                <div className="group relative aspect-square overflow-hidden rounded-lg border border-white/12 bg-black/24" key={i}>
+                  <img alt="" className="h-full w-full object-cover" src={photo} />
+                  <button
+                    className="absolute inset-0 grid place-items-center bg-black/0 text-white/0 transition group-hover:bg-black/52 group-hover:text-white"
+                    onClick={() => removeCollagePhoto(i)}
+                    title="Remover foto"
+                    type="button"
+                  >
+                    <X className="h-5 w-5 drop-shadow" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid place-items-center rounded-lg border border-dashed border-white/14 py-8 text-sm font-medium text-white/38">
+              Nenhuma foto ainda — adicione para ativar o slide de colagem.
+            </div>
+          )}
+        </section>
+
         <section className="editor-panel grid gap-4 p-4 sm:grid-cols-[1fr_auto] sm:items-end sm:p-5">
           <TextInput
             label="Cidade dos momentos"
@@ -3436,111 +3519,117 @@ function TimeTogetherSlide({ moodId, story }) {
   );
 }
 
+const COLLAGE_ROTATIONS = [-6, 4, -9, 5, -3, 7, -5, 6, -8];
+
 function CollageSlide({ story }) {
   const firstDate = getFirstChronologicalDate(story.moments);
   const place = story.city?.trim();
+  const collagePhotos = (story.collagePhotos ?? []).filter(Boolean);
+  const hasPhotos = collagePhotos.length > 0;
+
+  const ambient = (
+    <div className="pointer-events-none absolute inset-0">
+      <div className="absolute left-1/2 top-1/2 h-[70%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(108,33,53,0.22),transparent_70%)]" />
+      <div className="absolute right-[8%] top-[8%] h-52 w-52 rounded-full bg-[radial-gradient(ellipse,rgba(240,201,122,0.07),transparent_70%)]" />
+      <div className="absolute bottom-[10%] left-[4%] h-44 w-44 rounded-full bg-[radial-gradient(ellipse,rgba(232,160,184,0.09),transparent_70%)]" />
+    </div>
+  );
+
+  const nameBlock = (
+    <div className="luxury-rise grid gap-1" style={{ animationDelay: "120ms" }}>
+      <span className="story-copy-light break-words font-display text-[2.8rem] italic leading-[0.9] text-white sm:text-6xl">
+        {story.fromName || "Eu"}
+      </span>
+      <span className="story-copy-light font-display text-2xl leading-none text-[#e8a0b8]/52">&amp;</span>
+      <span className="story-copy-light break-words font-display text-[2.8rem] italic leading-[0.9] text-white sm:text-6xl">
+        {story.toName || "você"}
+      </span>
+    </div>
+  );
+
+  const pills = (firstDate || place) ? (
+    <div
+      className="luxury-rise mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 text-[11px] font-black uppercase tracking-[0.1em]"
+      style={{ animationDelay: "320ms" }}
+    >
+      {firstDate ? (
+        <span className="story-copy-light inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/6 px-3 py-2 backdrop-blur">
+          <CalendarHeart className="h-3.5 w-3.5 text-[#f0c97a]" />
+          {formatDate(firstDate)}
+        </span>
+      ) : null}
+      {place ? (
+        <span className="story-copy-light inline-flex max-w-full items-center gap-2 rounded-full border border-white/14 bg-white/6 px-3 py-2 backdrop-blur">
+          <MapPin className="h-3.5 w-3.5 shrink-0 text-[#f0c97a]" />
+          <span className="truncate">{place}</span>
+        </span>
+      ) : null}
+    </div>
+  ) : null;
+
+  if (!hasPhotos) {
+    return (
+      <article className="scene-fade relative grid h-full w-full place-items-center overflow-hidden bg-[#08050a] px-6 py-4 text-center">
+        {ambient}
+        <div className="pointer-events-none absolute inset-0 select-none overflow-hidden">
+          <span className="luxury-rise absolute left-[4%] top-[10%] -rotate-[13deg] font-display text-4xl italic text-white/12" style={{ animationDelay: "60ms" }}>amor</span>
+          <span className="luxury-rise absolute right-[5%] top-[7%] rotate-[9deg] text-[10px] font-black uppercase tracking-[0.26em] text-[#f0c97a]/26" style={{ animationDelay: "140ms" }}>sempre</span>
+          <span className="luxury-rise absolute left-[2%] top-[40%] -rotate-[6deg] font-display text-xl italic text-[#e8a0b8]/22" style={{ animationDelay: "100ms" }}>desde sempre</span>
+          <span className="luxury-rise absolute right-[3%] top-[46%] rotate-[7deg] font-display text-3xl italic text-white/11" style={{ animationDelay: "180ms" }}>juntos</span>
+          <span className="luxury-rise absolute bottom-[17%] left-[4%] rotate-[11deg] font-display text-2xl italic text-[#f0c97a]/20" style={{ animationDelay: "80ms" }}>nossa</span>
+          <span className="luxury-rise absolute bottom-[11%] right-[3%] -rotate-[8deg] text-[9px] font-black uppercase tracking-[0.22em] text-white/16" style={{ animationDelay: "220ms" }}>para sempre</span>
+        </div>
+        <div className="relative z-10 mx-auto grid w-full max-w-sm gap-5 text-center">
+          <p className="luxury-rise story-copy-light text-[10px] font-black uppercase tracking-[0.28em] text-[#f0c97a]" style={{ animationDelay: "0ms" }}>a nossa história</p>
+          {nameBlock}
+          <div className="luxury-rise mx-auto flex items-center gap-3 text-[#e8a0b8]/50" style={{ animationDelay: "260ms" }}>
+            <span className="h-px w-10 bg-current" />
+            <Heart className="h-3 w-3 fill-current" />
+            <span className="h-px w-10 bg-current" />
+          </div>
+          {pills}
+        </div>
+      </article>
+    );
+  }
+
+  const shown = collagePhotos.slice(0, 9);
+  const cols = shown.length <= 2 ? shown.length : shown.length <= 4 ? 2 : 3;
+  const colClass = cols === 1 ? "grid-cols-1" : cols === 2 ? "grid-cols-2" : "grid-cols-3";
 
   return (
-    <article className="scene-fade relative grid h-full w-full place-items-center overflow-hidden bg-[#08050a] px-6 py-4 text-center">
-      {/* Ambient glows */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-1/2 h-[70%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(ellipse,rgba(108,33,53,0.22),transparent_70%)]" />
-        <div className="absolute right-[8%] top-[8%] h-52 w-52 rounded-full bg-[radial-gradient(ellipse,rgba(240,201,122,0.07),transparent_70%)]" />
-        <div className="absolute bottom-[10%] left-[4%] h-44 w-44 rounded-full bg-[radial-gradient(ellipse,rgba(232,160,184,0.09),transparent_70%)]" />
-      </div>
-
-      {/* Scattered word fragments */}
-      <div className="pointer-events-none absolute inset-0 select-none overflow-hidden">
-        <span
-          className="luxury-rise absolute left-[4%] top-[10%] -rotate-[13deg] font-display text-4xl italic text-white/12"
-          style={{ animationDelay: "60ms" }}
-        >
-          amor
-        </span>
-        <span
-          className="luxury-rise absolute right-[5%] top-[7%] rotate-[9deg] text-[10px] font-black uppercase tracking-[0.26em] text-[#f0c97a]/26"
-          style={{ animationDelay: "140ms" }}
-        >
-          sempre
-        </span>
-        <span
-          className="luxury-rise absolute left-[2%] top-[40%] -rotate-[6deg] font-display text-xl italic text-[#e8a0b8]/22"
-          style={{ animationDelay: "100ms" }}
-        >
-          desde sempre
-        </span>
-        <span
-          className="luxury-rise absolute right-[3%] top-[46%] rotate-[7deg] font-display text-3xl italic text-white/11"
-          style={{ animationDelay: "180ms" }}
-        >
-          juntos
-        </span>
-        <span
-          className="luxury-rise absolute bottom-[17%] left-[4%] rotate-[11deg] font-display text-2xl italic text-[#f0c97a]/20"
-          style={{ animationDelay: "80ms" }}
-        >
-          nossa
-        </span>
-        <span
-          className="luxury-rise absolute bottom-[11%] right-[3%] -rotate-[8deg] text-[9px] font-black uppercase tracking-[0.22em] text-white/16"
-          style={{ animationDelay: "220ms" }}
-        >
-          para sempre
-        </span>
-        <span
-          className="luxury-rise absolute left-[8%] top-[25%] h-px w-14 -rotate-[16deg] bg-[#f0c97a]/16"
-          style={{ animationDelay: "160ms" }}
-        />
-        <span
-          className="luxury-rise absolute bottom-[30%] right-[7%] h-px w-10 rotate-[12deg] bg-[#e8a0b8]/14"
-          style={{ animationDelay: "200ms" }}
-        />
-      </div>
-
-      {/* Center content */}
-      <div className="relative z-10 mx-auto grid w-full max-w-sm gap-5">
-        <p
-          className="luxury-rise story-copy-light text-[10px] font-black uppercase tracking-[0.28em] text-[#f0c97a]"
-          style={{ animationDelay: "0ms" }}
-        >
+    <article className="scene-fade relative flex h-full w-full flex-col overflow-hidden bg-[#08050a]">
+      {ambient}
+      <div className="relative z-10 shrink-0 px-4 pb-2 pt-4 text-center">
+        <p className="luxury-rise story-copy-light text-[10px] font-black uppercase tracking-[0.26em] text-[#f0c97a]" style={{ animationDelay: "0ms" }}>
           a nossa história
         </p>
-        <div className="luxury-rise grid gap-1" style={{ animationDelay: "120ms" }}>
-          <h2 className="story-copy-light break-words font-display text-[3.4rem] italic leading-[0.9] text-white sm:text-7xl">
-            {story.fromName || "Eu"}
-          </h2>
-          <p className="story-copy-light font-display text-[1.8rem] leading-none text-[#e8a0b8]/58">&amp;</p>
-          <h2 className="story-copy-light break-words font-display text-[3.4rem] italic leading-[0.9] text-white sm:text-7xl">
-            {story.toName || "você"}
-          </h2>
+      </div>
+      <div className="relative min-h-0 flex-1 px-3">
+        <div className={`grid h-full auto-rows-fr gap-1.5 ${colClass}`}>
+          {shown.map((photo, i) => (
+            <div
+              key={i}
+              className="luxury-rise relative overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.54)]"
+              style={{
+                animationDelay: `${60 + i * 70}ms`,
+                borderRadius: "10px",
+                transform: `rotate(${COLLAGE_ROTATIONS[i % COLLAGE_ROTATIONS.length]}deg)`,
+              }}
+            >
+              <img alt="" className="photo-filter-luxury h-full w-full object-cover" src={photo} />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+            </div>
+          ))}
         </div>
-        <div
-          className="luxury-rise mx-auto flex items-center gap-3 text-[#e8a0b8]/50"
-          style={{ animationDelay: "260ms" }}
-        >
-          <span className="h-px w-10 bg-current" />
-          <Heart className="h-3 w-3 fill-current" />
-          <span className="h-px w-10 bg-current" />
+      </div>
+      <div className="relative z-10 shrink-0 px-4 pb-3 pt-2 text-center">
+        <div className="luxury-rise flex flex-col items-center gap-2" style={{ animationDelay: `${60 + shown.length * 70}ms` }}>
+          <span className="story-copy-light break-words font-display text-2xl italic leading-none text-white sm:text-3xl">
+            {story.fromName || "Eu"} &amp; {story.toName || "você"}
+          </span>
+          {pills}
         </div>
-        {(firstDate || place) ? (
-          <div
-            className="luxury-rise mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 text-[11px] font-black uppercase tracking-[0.1em]"
-            style={{ animationDelay: "360ms" }}
-          >
-            {firstDate ? (
-              <span className="story-copy-light inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/6 px-3 py-2 backdrop-blur">
-                <CalendarHeart className="h-3.5 w-3.5 text-[#f0c97a]" />
-                {formatDate(firstDate)}
-              </span>
-            ) : null}
-            {place ? (
-              <span className="story-copy-light inline-flex max-w-full items-center gap-2 rounded-full border border-white/14 bg-white/6 px-3 py-2 backdrop-blur">
-                <MapPin className="h-3.5 w-3.5 shrink-0 text-[#f0c97a]" />
-                <span className="truncate">{place}</span>
-              </span>
-            ) : null}
-          </div>
-        ) : null}
       </div>
     </article>
   );
