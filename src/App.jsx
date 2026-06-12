@@ -63,6 +63,7 @@ const EDITOR_STEPS = [
   { id: "moments", name: "Momentos", shortName: "Fotos" },
   { id: "visual", name: "Visual", shortName: "Visual" },
   { id: "music", name: "Música", shortName: "Música" },
+  { id: "share", name: "Enviar", shortName: "Enviar" },
 ];
 const ROMANTIC_SCENES = {
   mix: {
@@ -2317,6 +2318,82 @@ function CreateMode({
         </section>
         ) : null}
 
+        {editorStep === "share" ? (
+        <section className="grid gap-6">
+          <div>
+            <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-[#f0c97a]/80">Enviar</p>
+            <h2 className="font-display text-3xl leading-none text-white sm:text-4xl">Como você quer compartilhar?</h2>
+            <p className="mt-2 text-sm font-semibold leading-6 text-white/58">
+              Escolha a opção que faz sentido para o seu caso.
+            </p>
+          </div>
+
+          <button
+            className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-xl bg-[#8f3654] text-base font-black text-white shadow-[0_12px_36px_rgba(143,54,84,0.32)] transition enabled:hover:-translate-y-0.5 enabled:hover:bg-[#a04465] disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!canPresent}
+            onClick={startPresentation}
+            type="button"
+          >
+            <Sparkles className="h-5 w-5" />
+            Ver a apresentação agora
+          </button>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="editor-panel grid gap-4 p-5">
+              <div className="grid gap-1.5">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#f0c97a]">Link direto</p>
+                <p className="font-display text-xl text-white">Rápido, sem deploy</p>
+                <p className="text-sm font-semibold leading-6 text-white/58">
+                  Gera um link com a história embutida. Funciona bem para histórias com poucas fotos — ideal para testar ou enviar pelo WhatsApp.
+                </p>
+                {canPresent && (
+                  <p className={`text-xs font-bold ${linkLength > 50000 ? "text-amber-300" : "text-white/40"}`}>
+                    {linkLength > 50000
+                      ? `Link com ${linkLength.toLocaleString("pt-BR")} caracteres — pode travar em alguns navegadores. Prefira Publicar.`
+                      : `Tamanho: ${linkLength.toLocaleString("pt-BR")} caracteres — OK para envio.`}
+                  </p>
+                )}
+              </div>
+              <button
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#f0c97a] px-5 text-sm font-black text-[#1a0714] transition enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!canPresent}
+                onClick={copyShareLink}
+                type="button"
+              >
+                <Copy className="h-4 w-4" />
+                Copiar link
+              </button>
+              {shareStatus ? <p className="text-xs font-bold text-[#e8a0b8]">{shareStatus}</p> : null}
+            </div>
+
+            <div className="editor-panel grid gap-4 p-5">
+              <div className="grid gap-1.5">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#e8a0b8]">Publicar na Vercel</p>
+                <p className="font-display text-xl text-white">Link limpo e permanente</p>
+                <p className="text-sm font-semibold leading-6 text-white/58">
+                  Gera um ZIP com as fotos otimizadas. Você extrai na pasta do projeto, faz git push, e a Vercel publica automaticamente.
+                </p>
+                <ol className="mt-1 grid gap-1 text-xs font-semibold text-white/40">
+                  <li>1. Clique em Gerar pacote</li>
+                  <li>2. Extraia o ZIP na pasta do projeto</li>
+                  <li>3. Git push → Vercel redeploya sozinho</li>
+                </ol>
+              </div>
+              <button
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-white px-5 text-sm font-black text-[#1a0714] transition enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={!canPresent || publishing}
+                onClick={exportForVercel}
+                type="button"
+              >
+                {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Gerar pacote
+              </button>
+              {publishStatus ? <p className="text-xs font-bold text-amber-200/90">{publishStatus}</p> : null}
+            </div>
+          </div>
+        </section>
+        ) : null}
+
         <div className="flex items-center justify-between border-t border-white/[0.08] pt-4">
           <button
             className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-black text-white/58 transition hover:bg-white/[0.05] hover:text-white disabled:invisible"
@@ -2383,21 +2460,11 @@ function CreateMode({
           <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
             <div className="text-xs font-medium leading-5 text-white/68">
               <span className="mb-1 block text-[#e8a0b8]">{draftStatus}</span>
-              {canPresent ? (
-                <>
-                  Link rápido estimado: <span className="text-white/90">{linkLength.toLocaleString("pt-BR")} caracteres</span>.
-                  {linkLength > 12000
-                    ? " Use Finalizar para Vercel para gerar o link definitivo sem base64."
-                    : " Serve para teste. Para o envio final, gere o pacote da Vercel."}
-                </>
-              ) : (
-                "Preencha os nomes e pelo menos um momento com foto e título. Data e texto são opcionais."
-              )}
-              {shareStatus ? <span className="mt-1 block text-[#e8a0b8]">{shareStatus}</span> : null}
-              {publishStatus ? <span className="mt-1 block text-amber-200/90">{publishStatus}</span> : null}
+              {canPresent
+                ? "História pronta. Vá até a etapa Enviar para compartilhar."
+                : "Preencha os nomes e pelo menos um momento com foto e título."}
             </div>
-
-            <div className="grid grid-cols-2 gap-2 sm:flex">
+            <div className="flex gap-2">
               <button
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/12 px-4 text-sm font-bold text-white/80 transition enabled:hover:bg-white/[0.08] enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-36"
                 onClick={clearSavedDraft}
@@ -2407,31 +2474,13 @@ function CreateMode({
                 Apagar rascunho
               </button>
               <button
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/12 px-4 text-sm font-bold text-white/80 transition enabled:hover:bg-white/[0.08] enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-36"
-                disabled={!canPresent}
-                onClick={copyShareLink}
-                type="button"
-              >
-                <Copy className="h-4 w-4" />
-                Copiar link
-              </button>
-              <button
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#8f3654] px-5 text-sm font-black text-white shadow-[0_12px_36px_rgba(143,54,84,0.32)] transition enabled:hover:-translate-y-0.5 enabled:hover:bg-[#a04465] enabled:hover:shadow-[0_16px_44px_rgba(143,54,84,0.4)] disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#8f3654] px-5 text-sm font-black text-white shadow-[0_12px_36px_rgba(143,54,84,0.32)] transition enabled:hover:-translate-y-0.5 enabled:hover:bg-[#a04465] disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={!canPresent}
                 onClick={startPresentation}
                 type="button"
               >
                 <Sparkles className="h-4 w-4" />
-                Ver nossa história
-              </button>
-              <button
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#ffefd8] px-5 text-sm font-black text-[#3a0d1f] transition enabled:hover:-translate-y-0.5 enabled:hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={!canPresent || publishing}
-                onClick={exportForVercel}
-                type="button"
-              >
-                {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                Finalizar para Vercel
+                Ver
               </button>
             </div>
           </div>
