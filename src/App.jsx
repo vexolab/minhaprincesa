@@ -10,6 +10,7 @@ import {
   FileUp,
   Heart,
   ImagePlus,
+  LayoutGrid,
   Loader2,
   MapPin,
   Move,
@@ -296,7 +297,6 @@ const initialStory = {
   moodId: "mix",
   styleId: VALENTINES_STYLE_ID,
   trackId: "aurora",
-  collageSections: [],
   moments: [
     {
       id: "moment-1",
@@ -361,9 +361,39 @@ function isBreath(entry) {
   return entry?.kind === "breath";
 }
 
+function createCollage() {
+  return {
+    id: crypto?.randomUUID?.() ?? `collage-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    kind: "collage",
+    photos: [],
+  };
+}
+
+function isCollage(entry) {
+  return entry?.kind === "collage";
+}
+
 function normalizeStory(story) {
   let photoIndex = 0;
-  const safeMoments = [...(story.moments ?? [])].flatMap((entry) => {
+  const rawMoments = [...(story.moments ?? [])];
+
+  // Migrate old collageSections / collagePhotos to collage moment entries at the start
+  const hasCollageKind = rawMoments.some(isCollage);
+  if (!hasCollageKind) {
+    let oldSections = story.collageSections ?? null;
+    if (!oldSections && (story.collagePhotos ?? []).some(Boolean)) {
+      oldSections = [{ id: "s1", photos: (story.collagePhotos ?? []).filter(Boolean) }];
+    }
+    if (oldSections?.length) {
+      oldSections.forEach((section) => {
+        if (section?.id && (section.photos ?? []).some(Boolean)) {
+          rawMoments.unshift({ id: String(section.id), kind: "collage", photos: section.photos.filter(Boolean) });
+        }
+      });
+    }
+  }
+
+  const safeMoments = rawMoments.flatMap((entry) => {
     if (isBreath(entry)) {
       const text = entry.text?.trim?.() ?? "";
       if (!text) return [];
@@ -375,6 +405,10 @@ function normalizeStory(story) {
         title: entry.title?.trim?.() || preset.title,
         text,
       }];
+    }
+
+    if (isCollage(entry)) {
+      return [{ id: entry.id, kind: "collage", photos: (entry.photos ?? []).filter(Boolean) }];
     }
 
     if (!entry.title?.trim?.() || !entry.photo) return [];
@@ -412,15 +446,6 @@ function normalizeStory(story) {
     moodId: ROMANTIC_MOOD_IDS.has(story.moodId) ? story.moodId : "mix",
     styleId: VALENTINES_STYLE_ID,
     trackId: TRACK_BY_ID[story.trackId] ? story.trackId : "aurora",
-    collageSections: (() => {
-      let sections = story.collageSections ?? null;
-      if (!sections && (story.collagePhotos ?? []).some(Boolean)) {
-        sections = [{ id: "s1", photos: (story.collagePhotos ?? []).filter(Boolean) }];
-      }
-      return (sections ?? [])
-        .filter((s) => s?.id)
-        .map((s) => ({ id: String(s.id), photos: (s.photos ?? []).filter(Boolean) }));
-    })(),
     moments: safeMoments,
   };
 }
@@ -496,7 +521,7 @@ function makeIntroCopy(story, moments) {
 }
 
 function makeFinalCopy(story, moments) {
-  const count = moments.filter((moment) => !isBreath(moment)).length;
+  const count = moments.filter((moment) => !isBreath(moment) && !isCollage(moment)).length;
   return `${story.toName || "Meu amor"}, depois de ${count} ${count === 1 ? "momento" : "momentos"}, eu so tenho uma certeza bonita: se a vida me desse tudo de novo, eu ainda procuraria voce no meio do mundo. Com amor, ${story.fromName || "eu"}.`;
 }
 
@@ -637,28 +662,26 @@ function getRomanticScene(moodId) {
 function buildPresentationSequence(story) {
   const sequence = [{ id: "opening", type: "opening" }];
   const entries = story.moments ?? [];
-  const photoMoments = entries.filter((entry) => !isBreath(entry));
+  const photoMoments = entries.filter((entry) => !isBreath(entry) && !isCollage(entry));
   const hasDatedMoments = photoMoments.some((moment) => moment.date);
   const hasCustomBreaths = entries.some(isBreath);
   let photoIndex = 0;
   let lastActId = "";
 
-  const collageSections = (story.collageSections ?? []).filter((s) => (s.photos ?? []).some(Boolean));
-  const hasCollageSections = collageSections.length > 0;
   if (hasDatedMoments) {
     sequence.push({ id: "time-together", type: "time" });
-  }
-  if (hasCollageSections) {
-    collageSections.forEach((section) => {
-      sequence.push({ id: `collage-${section.id}`, type: "collage", photos: section.photos });
-    });
-  } else if (hasDatedMoments) {
-    sequence.push({ id: "collage", type: "collage", photos: [] });
   }
 
   entries.forEach((entry, entryIndex) => {
     if (isBreath(entry)) {
       sequence.push({ id: `breath-${entry.id}`, type: "breath", breath: entry });
+      return;
+    }
+
+    if (isCollage(entry)) {
+      if ((entry.photos ?? []).some(Boolean)) {
+        sequence.push({ id: `collage-${entry.id}`, type: "collage", photos: entry.photos });
+      }
       return;
     }
 
@@ -1444,31 +1467,20 @@ export default function App() {
     }
   }
 
-  function addCollageSection() {
-    const id = `s${Date.now()}`;
-    setStory((current) => ({
-      ...current,
-      collageSections: [...(current.collageSections ?? []), { id, photos: [] }],
-    }));
-  }
-
-  function removeCollageSection(id) {
-    setStory((current) => ({
-      ...current,
-      collageSections: (current.collageSections ?? []).filter((s) => s.id !== id),
-    }));
+  function addCollage() {
+    setStory((current) => ({ ...current, moments: [...current.moments, createCollage()] }));
     setShareStatus("");
   }
 
-  async function addPhotoToSection(sectionId, file) {
+  async function addPhotoToCollage(id, file) {
     if (!file) return;
     setShareStatus("Otimizando foto da colagem...");
     try {
       const photo = await compressImageFile(file);
       setStory((current) => ({
         ...current,
-        collageSections: (current.collageSections ?? []).map((s) =>
-          s.id === sectionId ? { ...s, photos: [...(s.photos ?? []), photo] } : s,
+        moments: current.moments.map((m) =>
+          m.id === id ? { ...m, photos: [...(m.photos ?? []), photo] } : m,
         ),
       }));
       setShareStatus(`Foto adicionada. ${(photo.length / 1024).toFixed(0)} KB.`);
@@ -1477,11 +1489,11 @@ export default function App() {
     }
   }
 
-  function removePhotoFromSection(sectionId, photoIndex) {
+  function removePhotoFromCollage(id, photoIndex) {
     setStory((current) => ({
       ...current,
-      collageSections: (current.collageSections ?? []).map((s) =>
-        s.id === sectionId ? { ...s, photos: (s.photos ?? []).filter((_, i) => i !== photoIndex) } : s,
+      moments: current.moments.map((m) =>
+        m.id === id ? { ...m, photos: (m.photos ?? []).filter((_, i) => i !== photoIndex) } : m,
       ),
     }));
     setShareStatus("");
@@ -1824,10 +1836,9 @@ export default function App() {
       generateIntro={generateIntro}
       generateMomentText={generateMomentText}
       handlePhoto={handlePhoto}
-      addCollageSection={addCollageSection}
-      removeCollageSection={removeCollageSection}
-      addPhotoToSection={addPhotoToSection}
-      removePhotoFromSection={removePhotoFromSection}
+      addCollage={addCollage}
+      addPhotoToCollage={addPhotoToCollage}
+      removePhotoFromCollage={removePhotoFromCollage}
       handleAudioUpload={handleAudioUpload}
       linkLength={linkLength}
       localAudio={localAudio}
@@ -1862,13 +1873,12 @@ function CreateMode({
   generateFinal,
   generateIntro,
   generateMomentText,
-  addCollageSection,
-  addPhotoToSection,
+  addCollage,
+  addPhotoToCollage,
+  removePhotoFromCollage,
   handleAudioUpload,
   handlePhoto,
   importDraftBackup,
-  removeCollageSection,
-  removePhotoFromSection,
   linkLength,
   localAudio,
   loadNotice,
@@ -2111,95 +2121,6 @@ function CreateMode({
 
         {editorStep === "moments" ? (
           <>
-        <section className="editor-panel grid gap-5 p-4 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.18em] text-[#f0c97a]/80">Colagens</p>
-              <h2 className="font-display text-2xl leading-tight text-white sm:text-3xl">
-                Slides de colagem antes dos seus momentos.
-              </h2>
-              <p className="mt-1.5 text-xs font-medium leading-5 text-white/52">
-                Cada colagem vira um slide separado. Crie quantas quiser — cada uma com suas próprias fotos.
-              </p>
-            </div>
-            <button
-              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-white/18 bg-white/8 px-4 py-3 text-sm font-black text-white transition hover:bg-white/14"
-              onClick={addCollageSection}
-              type="button"
-            >
-              <ImagePlus className="h-4 w-4" />
-              Nova colagem
-            </button>
-          </div>
-          {(story.collageSections ?? []).length === 0 ? (
-            <div className="grid place-items-center rounded-lg border border-dashed border-white/14 py-8 text-sm font-medium text-white/38">
-              Nenhuma colagem ainda — clique em "Nova colagem" para criar.
-            </div>
-          ) : (
-            <div className="grid gap-4">
-              {(story.collageSections ?? []).map((section, sectionIndex) => (
-                <div className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-4" key={section.id}>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-black uppercase tracking-[0.18em] text-white/54">
-                      Colagem {sectionIndex + 1}
-                      {section.photos.length > 0 ? ` · ${section.photos.length} foto${section.photos.length > 1 ? "s" : ""}` : ""}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-xs font-black text-white transition hover:bg-white/16">
-                        <ImagePlus className="h-3.5 w-3.5" />
-                        Adicionar fotos
-                        <input
-                          accept="image/*"
-                          className="hidden"
-                          multiple
-                          onChange={async (event) => {
-                            const files = Array.from(event.target.files ?? []);
-                            for (const file of files) await addPhotoToSection(section.id, file);
-                            event.target.value = "";
-                          }}
-                          type="file"
-                        />
-                      </label>
-                      <button
-                        className="inline-flex items-center justify-center rounded-lg border border-white/10 p-2 text-white/38 transition hover:border-red-400/40 hover:text-red-300"
-                        onClick={() => removeCollageSection(section.id)}
-                        title="Remover esta colagem"
-                        type="button"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  {(section.photos ?? []).length > 0 ? (
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-                      {(section.photos ?? []).map((photo, photoIndex) => (
-                        <div
-                          className="group relative aspect-square overflow-hidden rounded-lg border border-white/12 bg-black/24"
-                          key={photoIndex}
-                        >
-                          <img alt="" className="h-full w-full object-cover" src={photo} />
-                          <button
-                            className="absolute inset-0 grid place-items-center bg-black/0 text-white/0 transition group-hover:bg-black/52 group-hover:text-white"
-                            onClick={() => removePhotoFromSection(section.id, photoIndex)}
-                            title="Remover foto"
-                            type="button"
-                          >
-                            <X className="h-5 w-5 drop-shadow" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="grid place-items-center rounded-lg border border-dashed border-white/10 py-5 text-xs font-medium text-white/30">
-                      Nenhuma foto — adicione para preencher esta colagem.
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
         <section className="editor-panel grid gap-4 p-4 sm:grid-cols-[1fr_auto] sm:items-end sm:p-5">
           <TextInput
             label="Cidade dos momentos"
@@ -2229,7 +2150,7 @@ function CreateMode({
               <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-pink-200/80">Momentos</p>
               <h2 className="font-display text-3xl leading-none text-white sm:text-4xl">Fotos e pausas, na ordem que você escolher.</h2>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-black text-[#1a0714] transition hover:-translate-y-0.5"
                 onClick={addMoment}
@@ -2246,12 +2167,31 @@ function CreateMode({
                 <Sparkles className="h-4 w-4" />
                 Respiro
               </button>
+              <button
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#f0c97a]/24 bg-[#f0c97a]/10 px-4 text-sm font-black text-[#f0c97a] transition hover:bg-[#f0c97a]/16"
+                onClick={addCollage}
+                type="button"
+              >
+                <LayoutGrid className="h-4 w-4" />
+                Colagem
+              </button>
             </div>
           </div>
 
           <div className="grid gap-4">
             {moments.map((moment, index) =>
-              isBreath(moment) ? (
+              isCollage(moment) ? (
+                <CollageEditor
+                  addPhotoToCollage={addPhotoToCollage}
+                  index={index}
+                  key={moment.id}
+                  moment={moment}
+                  momentsCount={moments.length}
+                  moveMoment={moveMoment}
+                  removeMoment={removeMoment}
+                  removePhotoFromCollage={removePhotoFromCollage}
+                />
+              ) : isBreath(moment) ? (
                 <BreathEditor
                   index={index}
                   key={moment.id}
@@ -2270,7 +2210,7 @@ function CreateMode({
                   moment={moment}
                   momentsCount={moments.length}
                   moveMoment={moveMoment}
-                  photoNumber={moments.slice(0, index + 1).filter((entry) => !isBreath(entry)).length}
+                  photoNumber={moments.slice(0, index + 1).filter((entry) => !isBreath(entry) && !isCollage(entry)).length}
                   removeMoment={removeMoment}
                   updateMoment={updateMoment}
                 />
@@ -2512,6 +2452,96 @@ function TextInput({ label, onChange, placeholder, value }) {
         value={value}
       />
     </label>
+  );
+}
+
+function CollageEditor({ addPhotoToCollage, index, moment, momentsCount, moveMoment, removeMoment, removePhotoFromCollage }) {
+  const photoCount = (moment.photos ?? []).length;
+
+  return (
+    <article className="editor-panel grid gap-4 border-[#f0c97a]/14 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#f0c97a]">Slide de colagem</p>
+          <p className="mt-1 text-sm font-semibold leading-5 text-white/56">
+            {photoCount === 0
+              ? "Adicione fotos — sem fotos este slide não aparece na apresentação."
+              : `${photoCount} foto${photoCount > 1 ? "s" : ""} · aparece exatamente nesta posição.`}
+          </p>
+        </div>
+        <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-lg bg-[#f0c97a]/12 px-3 py-2 text-xs font-black text-[#f0c97a] transition hover:bg-[#f0c97a]/20">
+          <ImagePlus className="h-3.5 w-3.5" />
+          Adicionar
+          <input
+            accept="image/*"
+            className="hidden"
+            multiple
+            onChange={async (event) => {
+              const files = Array.from(event.target.files ?? []);
+              for (const file of files) await addPhotoToCollage(moment.id, file);
+              event.target.value = "";
+            }}
+            type="file"
+          />
+        </label>
+      </div>
+
+      {photoCount > 0 ? (
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+          {(moment.photos ?? []).map((photo, photoIndex) => (
+            <div
+              className="group relative aspect-square overflow-hidden rounded-lg border border-white/12 bg-black/24"
+              key={photoIndex}
+            >
+              <img alt="" className="h-full w-full object-cover" src={photo} />
+              <button
+                className="absolute inset-0 grid place-items-center bg-black/0 text-white/0 transition group-hover:bg-black/52 group-hover:text-white"
+                onClick={() => removePhotoFromCollage(moment.id, photoIndex)}
+                title="Remover foto"
+                type="button"
+              >
+                <X className="h-5 w-5 drop-shadow" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid place-items-center rounded-lg border border-dashed border-[#f0c97a]/16 py-5 text-xs font-medium text-white/30">
+          Nenhuma foto — adicione para ativar este slide.
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <button
+          aria-label="Mover colagem para cima"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/12 text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-25"
+          disabled={index === 0}
+          onClick={() => moveMoment(moment.id, -1)}
+          title="Mover para cima"
+          type="button"
+        >
+          <ArrowUp className="h-4 w-4" />
+        </button>
+        <button
+          aria-label="Mover colagem para baixo"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/12 text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-25"
+          disabled={index === momentsCount - 1}
+          onClick={() => moveMoment(moment.id, 1)}
+          title="Mover para baixo"
+          type="button"
+        >
+          <ArrowDown className="h-4 w-4" />
+        </button>
+        <button
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/12 px-3 text-xs font-black text-white/80 transition hover:bg-white/10"
+          onClick={() => removeMoment(moment.id)}
+          type="button"
+        >
+          <Trash2 className="h-4 w-4" />
+          Remover
+        </button>
+      </div>
+    </article>
   );
 }
 
