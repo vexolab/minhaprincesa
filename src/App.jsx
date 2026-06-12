@@ -3301,7 +3301,6 @@ function Presentation({
             copyShareLink={copyShareLink}
             onBackToCreate={onBackToCreate}
             publishedMode={publishedMode}
-            shareStatus={shareStatus}
             story={story}
             theme={theme}
             moodId={moodId}
@@ -4726,11 +4725,11 @@ function SecretLetterSlide({ story }) {
   );
 }
 
-function FinalSlide({ copyShareLink, moodId, onBackToCreate, publishedMode, shareStatus, story, theme }) {
+function FinalSlide({ copyShareLink, moodId, onBackToCreate, publishedMode, story, theme }) {
   const scene = getRomanticScene(moodId);
   const light = scene.finalTone === "light";
   const relationshipDays = totalDays(story.moments);
-  const memoriesCount = story.moments.filter((entry) => !isBreath(entry)).length;
+  const memoriesCount = story.moments.filter((entry) => !isBreath(entry) && !isCollage(entry)).length;
   const storyMeasure = Number.isFinite(relationshipDays)
     ? `${pluralizeDay(relationshipDays)} desde o primeiro marco`
     : `${memoriesCount} ${memoriesCount === 1 ? "memória guardada" : "memórias guardadas"} por você`;
@@ -4819,15 +4818,6 @@ function FinalSlide({ copyShareLink, moodId, onBackToCreate, publishedMode, shar
             </button>
           ) : null}
         </div>
-        {shareStatus ? (
-          <p
-            className={`final-reveal text-xs font-bold ${revealPhase >= 3 ? "is-visible" : ""} ${
-              light ? "story-copy-dark text-[#51382c]" : "story-copy-muted"
-            }`}
-          >
-            {shareStatus}
-          </p>
-        ) : null}
       </div>
     </article>
   );
