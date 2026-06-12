@@ -219,6 +219,49 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   will-change: transform;
 }
 
+.photo-motion-out {
+  animation: photoCinematicOut 13s cubic-bezier(0.1, 0.62, 0.22, 1) both;
+  will-change: transform;
+}
+
+.photo-motion-pan-r {
+  animation: photoPanRight 14s cubic-bezier(0.1, 0.62, 0.22, 1) both;
+  will-change: transform;
+}
+
+.photo-motion-pan-l {
+  animation: photoPanLeft 14s cubic-bezier(0.1, 0.62, 0.22, 1) both;
+  will-change: transform;
+}
+
+.photo-motion-up {
+  animation: photoFloatUp 14s cubic-bezier(0.1, 0.62, 0.22, 1) both;
+  will-change: transform;
+}
+
+/* ── Heart burst (FinalSlide) ───────────────────────────── */
+.heart-burst {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  animation: heartBurst var(--burst-dur, 1s) ease-out both;
+  animation-delay: var(--burst-delay, 0s);
+}
+
+/* ── StartGate reveal phases ────────────────────────────── */
+.gate-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 700ms cubic-bezier(0.16, 0.82, 0.22, 1),
+    transform 700ms cubic-bezier(0.16, 0.82, 0.22, 1);
+}
+
+.gate-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 /* ── Reveal animations ──────────────────────────────────── */
 .final-reveal {
   opacity: 0;
@@ -398,6 +441,56 @@ input[type="range"] {
   }
   to {
     transform: scale(var(--photo-scale-end, 1.06));
+  }
+}
+
+@keyframes photoCinematicOut {
+  from {
+    transform: scale(var(--photo-scale-end, 1.06));
+  }
+  to {
+    transform: scale(var(--photo-scale, 1));
+  }
+}
+
+@keyframes photoPanRight {
+  from {
+    transform: scale(var(--photo-scale-end, 1.06)) translateX(-2.5%);
+  }
+  to {
+    transform: scale(var(--photo-scale-end, 1.06)) translateX(2.5%);
+  }
+}
+
+@keyframes photoPanLeft {
+  from {
+    transform: scale(var(--photo-scale-end, 1.06)) translateX(2.5%);
+  }
+  to {
+    transform: scale(var(--photo-scale-end, 1.06)) translateX(-2.5%);
+  }
+}
+
+@keyframes photoFloatUp {
+  from {
+    transform: scale(var(--photo-scale-end, 1.06)) translateY(2%);
+  }
+  to {
+    transform: scale(var(--photo-scale-end, 1.06)) translateY(-2%);
+  }
+}
+
+@keyframes heartBurst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--bx, 0px)), calc(-50% + var(--by, 0px))) scale(1.3);
   }
 }
 

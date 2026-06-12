@@ -2991,9 +2991,20 @@ function Presentation({
     setStarted(true);
 
     try {
+      await document.documentElement.requestFullscreen?.();
+    } catch { /* fullscreen is optional */ }
+
+    try {
       if (audioSource === "local" && localAudioRef.current) {
+        localAudioRef.current.volume = 0;
         await localAudioRef.current.play();
         setLocalPlaying(true);
+        let vol = 0;
+        const fade = window.setInterval(() => {
+          vol = Math.min(1, vol + 0.05);
+          if (localAudioRef.current) localAudioRef.current.volume = vol;
+          if (vol >= 1) window.clearInterval(fade);
+        }, 100);
       } else if (audioSource === "synth") {
         await audio.play(story.trackId);
       }
@@ -3347,6 +3358,19 @@ function AmbientHearts({ moodId, styleId }) {
 function StartGate({ audioSource, moodId, onBackToCreate, onStart, publishedMode, story }) {
   const scene = getRomanticScene(moodId);
   const light = scene.openingTone === "light";
+  const reducedMotion = usePrefersReducedMotion();
+  const [phase, setPhase] = useState(reducedMotion ? 3 : 0);
+
+  useEffect(() => {
+    if (reducedMotion) return undefined;
+    const timers = [
+      window.setTimeout(() => setPhase(1), 180),
+      window.setTimeout(() => setPhase(2), 720),
+      window.setTimeout(() => setPhase(3), 1300),
+    ];
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [reducedMotion]);
+
   const audioHint =
     audioSource === "youtube"
       ? "O player da música aparece logo depois."
@@ -3357,68 +3381,67 @@ function StartGate({ audioSource, moodId, onBackToCreate, onStart, publishedMode
       className="fixed inset-0 z-[80] grid place-items-center overflow-hidden bg-[#10070e]/96 px-6 py-12 text-center backdrop-blur-xl"
       data-no-nav
     >
-      <img
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover"
-        src={scene.opening}
-      />
+      <img alt="" className="absolute inset-0 h-full w-full object-cover" src={scene.opening} />
       <div className={`absolute inset-0 ${scene.openingOverlay}`} />
-      <div
-        className={`absolute inset-0 ${
-          light ? "bg-[#fff8ee]/18" : "bg-[linear-gradient(180deg,rgba(12,5,10,0.18),rgba(12,5,10,0.48))]"
-        }`}
-      />
+      <div className={`absolute inset-0 ${light ? "bg-[#fff8ee]/18" : "bg-[linear-gradient(180deg,rgba(12,5,10,0.28),rgba(12,5,10,0.72))]"}`} />
+
       <div className="relative mx-auto grid w-full max-w-md gap-7">
-        <div className={`mx-auto grid gap-4 ${light ? "text-[#9a5260]" : "text-[#efb2c4]"}`}>
-          <Heart className="heart-beat-glow mx-auto h-8 w-8 fill-current" />
+        <div
+          className={`gate-reveal mx-auto grid gap-4 ${phase >= 1 ? "is-visible" : ""} ${light ? "text-[#9a5260]" : "text-[#efb2c4]"}`}
+        >
+          <Heart className="heart-beat-glow mx-auto h-9 w-9 fill-current" />
           <span className="mx-auto h-px w-16 bg-current opacity-38" />
         </div>
+
         <div className="grid gap-3">
           <p
-            className={`text-[11px] font-black uppercase tracking-[0.26em] ${
+            className={`gate-reveal text-[11px] font-black uppercase tracking-[0.26em] ${phase >= 1 ? "is-visible" : ""} ${
               light ? "story-copy-dark text-[#8a4351]" : "story-copy-light text-pink-100"
             }`}
           >
             Uma história feita especialmente para
           </p>
           <h1
-            className={`break-words font-display text-5xl leading-[0.88] sm:text-7xl ${
+            className={`gate-reveal break-words font-display text-5xl leading-[0.88] sm:text-7xl ${phase >= 2 ? "is-visible" : ""} ${
               light ? "story-copy-dark text-[#3a2118]" : "story-copy-light"
             }`}
           >
             {story.toName || "meu amor"}
           </h1>
           <p
-            className={`mx-auto max-w-sm text-base font-medium leading-7 ${
+            className={`gate-reveal mx-auto max-w-sm text-base font-medium leading-7 ${phase >= 2 ? "is-visible" : ""} ${
               light ? "story-copy-dark text-[#51382c]" : "story-copy-muted"
             }`}
           >
             {audioHint}
           </p>
         </div>
-        <button
-          className={`mx-auto inline-flex min-h-[56px] items-center justify-center gap-3 rounded-2xl px-8 text-base font-black shadow-[0_18px_52px_rgba(0,0,0,0.32)] transition hover:-translate-y-0.5 active:scale-[0.98] ${
-            light ? "bg-[#7a4350] text-white hover:bg-[#8a4f5e]" : "bg-white text-[#1a0714] hover:bg-white/94"
-          }`}
-          onClick={onStart}
-          type="button"
-        >
-          <Play className="h-5 w-5 fill-current" />
-          Começar nossa história
-        </button>
-        {!publishedMode ? (
+
+        <div className={`gate-reveal grid gap-4 ${phase >= 3 ? "is-visible" : ""}`}>
           <button
-            className={`mx-auto text-sm font-medium underline underline-offset-4 transition ${
-              light
-                ? "story-copy-dark text-[#51382c] decoration-[#51382c]/30 hover:text-[#7a4350]"
-                : "story-copy-muted decoration-white/36 hover:text-white"
+            className={`mx-auto inline-flex min-h-[58px] items-center justify-center gap-3 rounded-2xl px-10 text-base font-black shadow-[0_18px_52px_rgba(0,0,0,0.38)] transition hover:-translate-y-0.5 active:scale-[0.98] ${
+              light ? "bg-[#7a4350] text-white hover:bg-[#8a4f5e]" : "bg-white text-[#1a0714] hover:bg-white/94"
             }`}
-            onClick={onBackToCreate}
+            onClick={onStart}
             type="button"
           >
-            Voltar para editar
+            <Play className="h-5 w-5 fill-current" />
+            Começar nossa história
           </button>
-        ) : null}
+          {!publishedMode ? (
+            <button
+              className={`mx-auto text-sm font-medium underline underline-offset-4 transition ${
+                light
+                  ? "story-copy-dark text-[#51382c] decoration-[#51382c]/30 hover:text-[#7a4350]"
+                  : "story-copy-muted decoration-white/36 hover:text-white"
+              }`}
+              onClick={onBackToCreate}
+              type="button"
+            >
+              Voltar para editar
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -3520,6 +3543,16 @@ function TimeTogetherSlide({ moodId, story }) {
 }
 
 const COLLAGE_ROTATIONS = [-6, 4, -9, 5, -3, 7, -5, 6, -8];
+const PHOTO_MOTION_CLASSES = [
+  "photo-cinematic-motion",
+  "photo-motion-out",
+  "photo-motion-pan-r",
+  "photo-motion-pan-l",
+  "photo-motion-up",
+];
+function getMotionClass(index) {
+  return PHOTO_MOTION_CLASSES[index % PHOTO_MOTION_CLASSES.length];
+}
 
 function CollageSlide({ story }) {
   const firstDate = getFirstChronologicalDate(story.moments);
@@ -3925,7 +3958,7 @@ function CinemaMoment({ dayNumber, index, moment }) {
     <article className="scene-cinema letterbox relative h-full w-full overflow-hidden bg-black">
       <img
         alt=""
-        className="photo-cinematic-motion photo-filter-luxury h-full w-full object-cover"
+        className={`${getMotionClass(index)} photo-filter-luxury h-full w-full object-cover`}
         src={moment.photo}
         style={getMomentImageStyle(moment)}
       />
@@ -3976,7 +4009,7 @@ function StarlightMoment({ dayNumber, index, moment }) {
           <div className="relative h-full overflow-hidden rounded-t-[999px]">
             <img
               alt=""
-              className="photo-cinematic-motion photo-filter-luxury h-full w-full object-cover"
+              className={`${getMotionClass(index)} photo-filter-luxury h-full w-full object-cover`}
               src={moment.photo}
               style={getMomentImageStyle(moment)}
             />
@@ -4083,7 +4116,7 @@ function CleanPhotoMoment({ dayNumber, index, moment, moments }) {
       <div className="relative min-h-[44svh] overflow-hidden sm:min-h-0">
         <img
           alt=""
-          className="photo-cinematic-motion photo-filter-timeline h-full w-full object-cover"
+          className={`${getMotionClass(index)} photo-filter-timeline h-full w-full object-cover`}
           src={moment.photo}
           style={getMomentImageStyle(moment)}
         />
@@ -4124,7 +4157,7 @@ function CleanEditorialMoment({ dayNumber, index, moment }) {
       <div className="relative h-[42svh] overflow-hidden bg-[#211d1a] sm:aspect-[16/9] sm:h-auto">
         <img
           alt=""
-          className="photo-cinematic-motion photo-filter-classic h-full w-full object-cover"
+          className={`${getMotionClass(index)} photo-filter-classic h-full w-full object-cover`}
           src={moment.photo}
           style={getMomentImageStyle(moment)}
         />
@@ -4272,7 +4305,7 @@ function SpotifyMoment({ dayNumber, index, moment, theme }) {
         <div className="gentle-pop relative h-full overflow-hidden rounded-md border border-white/12 bg-black shadow-glow sm:aspect-square sm:h-auto">
           <img
             alt=""
-            className="photo-cinematic-motion photo-filter-spotify h-full w-full object-cover"
+            className={`${getMotionClass(index)} photo-filter-spotify h-full w-full object-cover`}
             src={moment.photo}
             style={getMomentImageStyle(moment)}
           />
@@ -4371,7 +4404,7 @@ function ArtMoment({ dayNumber, index, moment, theme }) {
           <div className="relative h-full overflow-hidden">
             <img
               alt=""
-              className="photo-cinematic-motion photo-filter-art h-full w-full object-cover"
+              className={`${getMotionClass(index)} photo-filter-art h-full w-full object-cover`}
               src={moment.photo}
               style={getMomentImageStyle(moment)}
             />
@@ -4450,7 +4483,7 @@ function TimelineMoment({ index, moment, moments, theme }) {
         <div className="relative h-[40svh] overflow-hidden rounded-md border border-white/12 bg-white/8 shadow-soft sm:aspect-[16/10] sm:h-auto sm:rounded-lg">
           <img
             alt=""
-            className="photo-cinematic-motion photo-filter-timeline h-full w-full object-cover"
+            className={`${getMotionClass(index)} photo-filter-timeline h-full w-full object-cover`}
             src={moment.photo}
             style={getMomentImageStyle(moment)}
           />
@@ -4495,7 +4528,7 @@ function BlendMoment({ dayNumber, index, moment, moments }) {
           <div className="relative h-full overflow-hidden rounded-sm">
             <img
               alt=""
-              className="photo-cinematic-motion photo-filter-spotify h-full w-full object-cover"
+              className={`${getMotionClass(index)} photo-filter-spotify h-full w-full object-cover`}
               src={moment.photo}
               style={getMomentImageStyle(moment)}
             />
@@ -4694,10 +4727,38 @@ function FinalSlide({ copyShareLink, moodId, onBackToCreate, publishedMode, shar
   );
 }
 
+const BURST_HEARTS = Array.from({ length: 12 }, (_, i) => {
+  const angle = (i / 12) * 2 * Math.PI;
+  const dist = 90 + (i % 3) * 40;
+  return {
+    id: i,
+    bx: `${Math.round(Math.cos(angle) * dist)}px`,
+    by: `${Math.round(Math.sin(angle) * dist)}px`,
+    delay: `${i * 55}ms`,
+    dur: `${820 + (i % 4) * 110}ms`,
+    size: i % 3 === 0 ? "22px" : "15px",
+  };
+});
+
 function HeartRain() {
   const colors = ["#df91aa", "#f0c97a", "#e8a0b8", "#c87090", "#ffd2df", "#f7d889"];
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      {BURST_HEARTS.map((h) => (
+        <Heart
+          className="heart-burst fill-current"
+          key={`burst-${h.id}`}
+          style={{
+            width: h.size,
+            height: h.size,
+            color: colors[h.id % colors.length],
+            "--bx": h.bx,
+            "--by": h.by,
+            "--burst-delay": h.delay,
+            "--burst-dur": h.dur,
+          }}
+        />
+      ))}
       {heartSeeds.map((heart) => (
         <Heart
           className="rain-heart absolute fill-current"
