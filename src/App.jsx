@@ -296,7 +296,7 @@ const initialStory = {
   moodId: "mix",
   styleId: VALENTINES_STYLE_ID,
   trackId: "aurora",
-  collagePhotos: [],
+  collageSections: [],
   moments: [
     {
       id: "moment-1",
@@ -412,7 +412,15 @@ function normalizeStory(story) {
     moodId: ROMANTIC_MOOD_IDS.has(story.moodId) ? story.moodId : "mix",
     styleId: VALENTINES_STYLE_ID,
     trackId: TRACK_BY_ID[story.trackId] ? story.trackId : "aurora",
-    collagePhotos: (story.collagePhotos ?? []).filter(Boolean),
+    collageSections: (() => {
+      let sections = story.collageSections ?? null;
+      if (!sections && (story.collagePhotos ?? []).some(Boolean)) {
+        sections = [{ id: "s1", photos: (story.collagePhotos ?? []).filter(Boolean) }];
+      }
+      return (sections ?? [])
+        .filter((s) => s?.id)
+        .map((s) => ({ id: String(s.id), photos: (s.photos ?? []).filter(Boolean) }));
+    })(),
     moments: safeMoments,
   };
 }
@@ -635,12 +643,17 @@ function buildPresentationSequence(story) {
   let photoIndex = 0;
   let lastActId = "";
 
-  const hasCollagePhotos = (story.collagePhotos ?? []).filter(Boolean).length > 0;
+  const collageSections = (story.collageSections ?? []).filter((s) => (s.photos ?? []).some(Boolean));
+  const hasCollageSections = collageSections.length > 0;
   if (hasDatedMoments) {
     sequence.push({ id: "time-together", type: "time" });
   }
-  if (hasCollagePhotos || hasDatedMoments) {
-    sequence.push({ id: "collage", type: "collage" });
+  if (hasCollageSections) {
+    collageSections.forEach((section) => {
+      sequence.push({ id: `collage-${section.id}`, type: "collage", photos: section.photos });
+    });
+  } else if (hasDatedMoments) {
+    sequence.push({ id: "collage", type: "collage", photos: [] });
   }
 
   entries.forEach((entry, entryIndex) => {
@@ -1431,25 +1444,45 @@ export default function App() {
     }
   }
 
-  async function handleAddCollagePhoto(file) {
+  function addCollageSection() {
+    const id = `s${Date.now()}`;
+    setStory((current) => ({
+      ...current,
+      collageSections: [...(current.collageSections ?? []), { id, photos: [] }],
+    }));
+  }
+
+  function removeCollageSection(id) {
+    setStory((current) => ({
+      ...current,
+      collageSections: (current.collageSections ?? []).filter((s) => s.id !== id),
+    }));
+    setShareStatus("");
+  }
+
+  async function addPhotoToSection(sectionId, file) {
     if (!file) return;
     setShareStatus("Otimizando foto da colagem...");
     try {
       const photo = await compressImageFile(file);
       setStory((current) => ({
         ...current,
-        collagePhotos: [...(current.collagePhotos ?? []), photo],
+        collageSections: (current.collageSections ?? []).map((s) =>
+          s.id === sectionId ? { ...s, photos: [...(s.photos ?? []), photo] } : s,
+        ),
       }));
-      setShareStatus(`Foto adicionada à colagem. ${(photo.length / 1024).toFixed(0)} KB.`);
+      setShareStatus(`Foto adicionada. ${(photo.length / 1024).toFixed(0)} KB.`);
     } catch {
       setShareStatus("Não consegui adicionar essa foto. Tente outra imagem.");
     }
   }
 
-  function removeCollagePhoto(index) {
+  function removePhotoFromSection(sectionId, photoIndex) {
     setStory((current) => ({
       ...current,
-      collagePhotos: (current.collagePhotos ?? []).filter((_, i) => i !== index),
+      collageSections: (current.collageSections ?? []).map((s) =>
+        s.id === sectionId ? { ...s, photos: (s.photos ?? []).filter((_, i) => i !== photoIndex) } : s,
+      ),
     }));
     setShareStatus("");
   }
@@ -1791,8 +1824,10 @@ export default function App() {
       generateIntro={generateIntro}
       generateMomentText={generateMomentText}
       handlePhoto={handlePhoto}
-      handleAddCollagePhoto={handleAddCollagePhoto}
-      removeCollagePhoto={removeCollagePhoto}
+      addCollageSection={addCollageSection}
+      removeCollageSection={removeCollageSection}
+      addPhotoToSection={addPhotoToSection}
+      removePhotoFromSection={removePhotoFromSection}
       handleAudioUpload={handleAudioUpload}
       linkLength={linkLength}
       localAudio={localAudio}
@@ -1827,11 +1862,13 @@ function CreateMode({
   generateFinal,
   generateIntro,
   generateMomentText,
-  handleAddCollagePhoto,
+  addCollageSection,
+  addPhotoToSection,
   handleAudioUpload,
   handlePhoto,
   importDraftBackup,
-  removeCollagePhoto,
+  removeCollageSection,
+  removePhotoFromSection,
   linkLength,
   localAudio,
   loadNotice,
@@ -2074,52 +2111,91 @@ function CreateMode({
 
         {editorStep === "moments" ? (
           <>
-        <section className="editor-panel grid gap-4 p-4 sm:p-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <section className="editor-panel grid gap-5 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.18em] text-[#f0c97a]/80">Colagem de abertura</p>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.18em] text-[#f0c97a]/80">Colagens</p>
               <h2 className="font-display text-2xl leading-tight text-white sm:text-3xl">
-                Fotos que aparecem juntas antes dos seus momentos.
+                Slides de colagem antes dos seus momentos.
               </h2>
               <p className="mt-1.5 text-xs font-medium leading-5 text-white/52">
-                Adicione de 1 a 9 fotos. Elas aparecem espalhadas no slide de colagem, sem spoilar os momentos que vêm depois.
+                Cada colagem vira um slide separado. Crie quantas quiser — cada uma com suas próprias fotos.
               </p>
             </div>
-            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-black text-[#1a0714] transition hover:-translate-y-0.5">
+            <button
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-white/18 bg-white/8 px-4 py-3 text-sm font-black text-white transition hover:bg-white/14"
+              onClick={addCollageSection}
+              type="button"
+            >
               <ImagePlus className="h-4 w-4" />
-              Adicionar foto
-              <input
-                accept="image/*"
-                className="hidden"
-                multiple
-                onChange={async (event) => {
-                  const files = Array.from(event.target.files ?? []);
-                  for (const file of files) await handleAddCollagePhoto(file);
-                  event.target.value = "";
-                }}
-                type="file"
-              />
-            </label>
+              Nova colagem
+            </button>
           </div>
-          {(story.collagePhotos ?? []).length > 0 ? (
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-              {(story.collagePhotos ?? []).map((photo, i) => (
-                <div className="group relative aspect-square overflow-hidden rounded-lg border border-white/12 bg-black/24" key={i}>
-                  <img alt="" className="h-full w-full object-cover" src={photo} />
-                  <button
-                    className="absolute inset-0 grid place-items-center bg-black/0 text-white/0 transition group-hover:bg-black/52 group-hover:text-white"
-                    onClick={() => removeCollagePhoto(i)}
-                    title="Remover foto"
-                    type="button"
-                  >
-                    <X className="h-5 w-5 drop-shadow" />
-                  </button>
-                </div>
-              ))}
+          {(story.collageSections ?? []).length === 0 ? (
+            <div className="grid place-items-center rounded-lg border border-dashed border-white/14 py-8 text-sm font-medium text-white/38">
+              Nenhuma colagem ainda — clique em "Nova colagem" para criar.
             </div>
           ) : (
-            <div className="grid place-items-center rounded-lg border border-dashed border-white/14 py-8 text-sm font-medium text-white/38">
-              Nenhuma foto ainda — adicione para ativar o slide de colagem.
+            <div className="grid gap-4">
+              {(story.collageSections ?? []).map((section, sectionIndex) => (
+                <div className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-4" key={section.id}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-black uppercase tracking-[0.18em] text-white/54">
+                      Colagem {sectionIndex + 1}
+                      {section.photos.length > 0 ? ` · ${section.photos.length} foto${section.photos.length > 1 ? "s" : ""}` : ""}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-xs font-black text-white transition hover:bg-white/16">
+                        <ImagePlus className="h-3.5 w-3.5" />
+                        Adicionar fotos
+                        <input
+                          accept="image/*"
+                          className="hidden"
+                          multiple
+                          onChange={async (event) => {
+                            const files = Array.from(event.target.files ?? []);
+                            for (const file of files) await addPhotoToSection(section.id, file);
+                            event.target.value = "";
+                          }}
+                          type="file"
+                        />
+                      </label>
+                      <button
+                        className="inline-flex items-center justify-center rounded-lg border border-white/10 p-2 text-white/38 transition hover:border-red-400/40 hover:text-red-300"
+                        onClick={() => removeCollageSection(section.id)}
+                        title="Remover esta colagem"
+                        type="button"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  {(section.photos ?? []).length > 0 ? (
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+                      {(section.photos ?? []).map((photo, photoIndex) => (
+                        <div
+                          className="group relative aspect-square overflow-hidden rounded-lg border border-white/12 bg-black/24"
+                          key={photoIndex}
+                        >
+                          <img alt="" className="h-full w-full object-cover" src={photo} />
+                          <button
+                            className="absolute inset-0 grid place-items-center bg-black/0 text-white/0 transition group-hover:bg-black/52 group-hover:text-white"
+                            onClick={() => removePhotoFromSection(section.id, photoIndex)}
+                            title="Remover foto"
+                            type="button"
+                          >
+                            <X className="h-5 w-5 drop-shadow" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid place-items-center rounded-lg border border-dashed border-white/10 py-5 text-xs font-medium text-white/30">
+                      Nenhuma foto — adicione para preencher esta colagem.
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </section>
@@ -3168,7 +3244,7 @@ function Presentation({
         ) : currentSlide.type === "time" ? (
           <TimeTogetherSlide moodId={moodId} story={story} />
         ) : currentSlide.type === "collage" ? (
-          <CollageSlide story={story} />
+          <CollageSlide photos={currentSlide.photos ?? []} story={story} />
         ) : currentSlide.type === "mosaic" ? (
           <PhotoMosaicSlide story={story} />
         ) : currentSlide.type === "act" ? (
@@ -3554,10 +3630,10 @@ function getMotionClass(index) {
   return PHOTO_MOTION_CLASSES[index % PHOTO_MOTION_CLASSES.length];
 }
 
-function CollageSlide({ story }) {
+function CollageSlide({ photos, story }) {
   const firstDate = getFirstChronologicalDate(story.moments);
   const place = story.city?.trim();
-  const collagePhotos = (story.collagePhotos ?? []).filter(Boolean);
+  const collagePhotos = (photos ?? []).filter(Boolean);
   const hasPhotos = collagePhotos.length > 0;
 
   const ambient = (
