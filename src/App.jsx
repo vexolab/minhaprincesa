@@ -2319,78 +2319,45 @@ function CreateMode({
         ) : null}
 
         {editorStep === "share" ? (
-        <section className="grid gap-6">
+        <section className="grid gap-5">
           <div>
             <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-[#f0c97a]/80">Enviar</p>
-            <h2 className="font-display text-3xl leading-none text-white sm:text-4xl">Como você quer compartilhar?</h2>
-            <p className="mt-2 text-sm font-semibold leading-6 text-white/58">
-              Escolha a opção que faz sentido para o seu caso.
-            </p>
+            <h2 className="font-display text-3xl leading-none text-white sm:text-4xl">Pronto. Agora é só enviar.</h2>
           </div>
 
           <button
-            className="inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-xl bg-[#8f3654] text-base font-black text-white shadow-[0_12px_36px_rgba(143,54,84,0.32)] transition enabled:hover:-translate-y-0.5 enabled:hover:bg-[#a04465] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex min-h-16 w-full items-center justify-center gap-3 rounded-2xl bg-[#f0c97a] text-lg font-black text-[#1a0714] shadow-[0_12px_36px_rgba(240,201,122,0.28)] transition enabled:hover:-translate-y-0.5 enabled:hover:shadow-[0_16px_44px_rgba(240,201,122,0.38)] disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!canPresent}
+            onClick={copyShareLink}
+            type="button"
+          >
+            <Copy className="h-5 w-5" />
+            Copiar link para enviar
+          </button>
+
+          {shareStatus ? (
+            <p className="text-center text-sm font-bold text-[#e8a0b8]">{shareStatus}</p>
+          ) : canPresent ? (
+            <p className="text-center text-xs font-semibold text-white/40">
+              Cole o link no WhatsApp — a pessoa abre e já vê a apresentação.
+            </p>
+          ) : null}
+
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-white/10" />
+            <span className="text-xs font-black uppercase tracking-widest text-white/24">ou</span>
+            <div className="h-px flex-1 bg-white/10" />
+          </div>
+
+          <button
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#8f3654] text-sm font-black text-white shadow-[0_8px_24px_rgba(143,54,84,0.22)] transition enabled:hover:-translate-y-0.5 enabled:hover:bg-[#a04465] disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!canPresent}
             onClick={startPresentation}
             type="button"
           >
-            <Sparkles className="h-5 w-5" />
-            Ver a apresentação agora
+            <Sparkles className="h-4 w-4" />
+            Ver a apresentação antes de enviar
           </button>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="editor-panel grid gap-4 p-5">
-              <div className="grid gap-1.5">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#f0c97a]">Link direto</p>
-                <p className="font-display text-xl text-white">Rápido, sem deploy</p>
-                <p className="text-sm font-semibold leading-6 text-white/58">
-                  Gera um link com a história embutida. Funciona bem para histórias com poucas fotos — ideal para testar ou enviar pelo WhatsApp.
-                </p>
-                {canPresent && (
-                  <p className={`text-xs font-bold ${linkLength > 50000 ? "text-amber-300" : "text-white/40"}`}>
-                    {linkLength > 50000
-                      ? `Link com ${linkLength.toLocaleString("pt-BR")} caracteres — pode travar em alguns navegadores. Prefira Publicar.`
-                      : `Tamanho: ${linkLength.toLocaleString("pt-BR")} caracteres — OK para envio.`}
-                  </p>
-                )}
-              </div>
-              <button
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#f0c97a] px-5 text-sm font-black text-[#1a0714] transition enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={!canPresent}
-                onClick={copyShareLink}
-                type="button"
-              >
-                <Copy className="h-4 w-4" />
-                Copiar link
-              </button>
-              {shareStatus ? <p className="text-xs font-bold text-[#e8a0b8]">{shareStatus}</p> : null}
-            </div>
-
-            <div className="editor-panel grid gap-4 p-5">
-              <div className="grid gap-1.5">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#e8a0b8]">Publicar na Vercel</p>
-                <p className="font-display text-xl text-white">Link limpo e permanente</p>
-                <p className="text-sm font-semibold leading-6 text-white/58">
-                  Gera um ZIP com as fotos otimizadas. Você extrai na pasta do projeto, faz git push, e a Vercel publica automaticamente.
-                </p>
-                <ol className="mt-1 grid gap-1 text-xs font-semibold text-white/40">
-                  <li>1. Clique em Gerar pacote</li>
-                  <li>2. Extraia o ZIP na pasta do projeto</li>
-                  <li>3. Git push → Vercel redeploya sozinho</li>
-                </ol>
-              </div>
-              <button
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-white px-5 text-sm font-black text-[#1a0714] transition enabled:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={!canPresent || publishing}
-                onClick={exportForVercel}
-                type="button"
-              >
-                {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                Gerar pacote
-              </button>
-              {publishStatus ? <p className="text-xs font-bold text-amber-200/90">{publishStatus}</p> : null}
-            </div>
-          </div>
         </section>
         ) : null}
 
